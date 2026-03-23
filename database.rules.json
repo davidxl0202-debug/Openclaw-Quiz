@@ -1,0 +1,27 @@
+{
+  "rules": {
+    "rooms": {
+      "$roomId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "players": {
+      "$roomId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "answers": {
+      "$roomId": {
+        "$questionIndex": {
+          "$playerId": {
+            ".read": true,
+            ".write": "!data.exists()",
+            ".validate": "newData.hasChildren(['choice', 'timeTaken'])"
+          }
+        }
+      }
+    }
+  }
+}
