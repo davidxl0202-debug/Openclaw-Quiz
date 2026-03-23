@@ -350,11 +350,15 @@ export default function AdminPage() {
               </div>
               <div className="as-list">
                 {sortedPlayers.map((p) => {
-                  const hasAnswered = !!answers[p.id];
+                  const ans = answers[p.id];
+                  const hasAnswered = !!ans;
                   return (
                     <div key={p.id} className={`as-row ${hasAnswered ? 'as-done' : 'as-pending'}`}>
                       <span className="as-indicator">{hasAnswered ? '✓' : '···'}</span>
                       <span className="as-name">{p.name}</span>
+                      {hasAnswered && ans.timeTaken && (
+                        <span className="as-time">{(ans.timeTaken / 1000).toFixed(1)}s</span>
+                      )}
                     </div>
                   );
                 })}

@@ -1217,6 +1217,14 @@ a:hover {
   color: var(--text-muted);
 }
 
+.as-time {
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: 0.3rem;
+}
+
 @media (max-width: 768px) {
   .admin-layout {
     flex-direction: column;
