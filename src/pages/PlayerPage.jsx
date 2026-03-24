@@ -208,7 +208,7 @@ export default function PlayerPage() {
       setPhase('countdown');
     } else if (room.status === 'question') {
       const qIndex = room.currentQuestion;
-      if (qIndex !== currentQ) {
+      if (qIndex !== currentQ || phase === 'countdown') {
         setCurrentQ(qIndex);
         setSelectedAnswer(null);
         setLastResult(null);
