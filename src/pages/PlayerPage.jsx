@@ -46,7 +46,7 @@ export default function PlayerPage() {
     searchParams.get('room')?.toUpperCase() || savedSession.current?.room || ''
   );
   const [playerName, setPlayerName] = useState(() => savedSession.current?.name || '');
-  const [playerId] = useState(() => savedSession.current?.pid || generatePlayerId());
+  const [playerId, setPlayerId] = useState(() => savedSession.current?.pid || generatePlayerId());
   const [error, setError] = useState('');
   const [room, setRoom] = useState(null);
   const [players, setPlayers] = useState({});
@@ -82,8 +82,9 @@ export default function PlayerPage() {
   }, []);
 
   // Set up room & player listeners
-  const connectToRoom = useCallback((code) => {
+  const connectToRoom = useCallback((code, pid) => {
     const db = getDb();
+    const activeId = pid || playerId;
 
     const roomUnsub = onValue(ref(db, `rooms/${code}`), (snap) => {
       const data = snap.val();
@@ -95,8 +96,8 @@ export default function PlayerPage() {
     const playersUnsub = onValue(ref(db, `players/${code}`), (snap) => {
       const data = snap.val() || {};
       setPlayers(data);
-      if (data[playerId]) {
-        setMyScore(data[playerId].score || 0);
+      if (data[activeId]) {
+        setMyScore(data[activeId].score || 0);
       }
     });
     unsubscribers.current.push(playersUnsub);
@@ -158,29 +159,37 @@ export default function PlayerPage() {
         return;
       }
 
-      // Check for duplicate nickname (exclude self in case of rejoin)
+      // Check for duplicate nickname — if exists, take over the old identity (rejoin)
       const playersSnap = await get(ref(db, `players/${code}`));
       const existingPlayers = playersSnap.val() || {};
-      const nameExists = Object.entries(existingPlayers).some(
-        ([id, p]) => id !== playerId && p.name.toLowerCase() === name.toLowerCase()
+      const existingEntry = Object.entries(existingPlayers).find(
+        ([id, p]) => p.name.toLowerCase() === name.toLowerCase()
       );
-      if (nameExists) {
-        setError('该昵称已被使用，请换一个');
-        return;
+
+      let activePlayerId = playerId;
+
+      if (existingEntry) {
+        const [oldId] = existingEntry;
+        if (oldId !== playerId) {
+          // Take over the old identity to preserve score
+          activePlayerId = oldId;
+          setPlayerId(oldId);
+        }
+        // Don't overwrite score — just reconnect
+      } else {
+        // Brand new player
+        await set(ref(db, `players/${code}/${activePlayerId}`), {
+          name,
+          score: 0,
+          joinedAt: Date.now() + serverOffset,
+        });
       }
 
-      // Write player data
-      await set(ref(db, `players/${code}/${playerId}`), {
-        name,
-        score: 0,
-        joinedAt: Date.now() + serverOffset,
-      });
-
       // Save session for reconnect on refresh
-      saveSession(playerId, code, name);
+      saveSession(activePlayerId, code, name);
 
       // Set up listeners
-      connectToRoom(code);
+      connectToRoom(code, activePlayerId);
 
       setRoomCode(code);
       setPhase('waiting');
