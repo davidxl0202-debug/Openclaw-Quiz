@@ -110,28 +110,31 @@ export default function PlayerPage() {
     const db = getDb();
     if (!db) return;
 
-    get(ref(db, `players/${session.room}/${session.pid}`)).then((snap) => {
-      if (!snap.exists()) {
+    (async () => {
+      try {
+        const playerSnap = await get(ref(db, `players/${session.room}/${session.pid}`));
+        if (!playerSnap.exists()) {
+          clearSession();
+          return;
+        }
+        const roomSnap = await get(ref(db, `rooms/${session.room}`));
+        if (!roomSnap.exists()) {
+          clearSession();
+          return;
+        }
+        const roomData = roomSnap.val();
+        if (roomData.status === 'finished') {
+          clearSession();
+          return;
+        }
+        setRoomCode(session.room);
+        setPlayerName(session.name);
+        connectToRoom(session.room);
+        setPhase('waiting'); // Room listener will update to correct phase
+      } catch (_) {
         clearSession();
-        return;
       }
-      // Also check room still exists
-      return get(ref(db, `rooms/${session.room}`));
-    }).then((roomSnap) => {
-      if (!roomSnap || !roomSnap.exists()) {
-        clearSession();
-        return;
-      }
-      const roomData = roomSnap.val();
-      if (roomData.status === 'finished') {
-        clearSession();
-        return;
-      }
-      connectToRoom(session.room);
-      setPhase('waiting'); // Room listener will update to correct phase
-    }).catch(() => {
-      clearSession();
-    });
+    })();
   }, [connectToRoom]);
 
   const joinRoom = async () => {
@@ -155,11 +158,11 @@ export default function PlayerPage() {
         return;
       }
 
-      // Check for duplicate nickname
+      // Check for duplicate nickname (exclude self in case of rejoin)
       const playersSnap = await get(ref(db, `players/${code}`));
       const existingPlayers = playersSnap.val() || {};
-      const nameExists = Object.values(existingPlayers).some(
-        (p) => p.name.toLowerCase() === name.toLowerCase()
+      const nameExists = Object.entries(existingPlayers).some(
+        ([id, p]) => id !== playerId && p.name.toLowerCase() === name.toLowerCase()
       );
       if (nameExists) {
         setError('该昵称已被使用，请换一个');
