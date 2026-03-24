@@ -18,7 +18,8 @@ function generateRoomCode() {
 
 export default function AdminPage() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState('create'); // create | lobby | question | result | finished
+  const [phase, setPhase] = useState('create'); // create | lobby | countdown | question | result | finished
+  const [countdown, setCountdown] = useState(0);
   const [roomCode, setRoomCode] = useState('');
   const [players, setPlayers] = useState({});
   const [currentQ, setCurrentQ] = useState(-1);
@@ -194,6 +195,34 @@ export default function AdminPage() {
     update(ref(db), backgroundUpdates);
   }, [answers, currentQ, players, roomCode]);
 
+  const COUNTDOWN_SECONDS = 5;
+
+  const startCountdown = useCallback(async (nextIndex) => {
+    const db = getDb();
+    const countdownEnd = Date.now() + serverOffset + COUNTDOWN_SECONDS * 1000;
+
+    await update(ref(db, `rooms/${roomCode}`), {
+      status: 'countdown',
+      currentQuestion: nextIndex,
+      countdownEnd,
+    });
+
+    setCurrentQ(nextIndex);
+    setCountdown(COUNTDOWN_SECONDS);
+    setPhase('countdown');
+  }, [roomCode, serverOffset]);
+
+  // Countdown tick: runs when phase is 'countdown'
+  useEffect(() => {
+    if (phase !== 'countdown') return;
+    if (countdown <= 1) {
+      startQuestion(currentQ);
+      return;
+    }
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, countdown, currentQ, startQuestion]);
+
   const nextOrFinish = useCallback(async () => {
     const next = currentQ + 1;
     if (next >= questions.length) {
@@ -201,9 +230,9 @@ export default function AdminPage() {
       await update(ref(db, `rooms/${roomCode}`), { status: 'finished' });
       setPhase('finished');
     } else {
-      await startQuestion(next);
+      await startCountdown(next);
     }
-  }, [currentQ, roomCode, startQuestion]);
+  }, [currentQ, roomCode, startCountdown]);
 
   const playerCount = Object.keys(players).length;
   const answerCount = Object.keys(answers).length;
@@ -278,7 +307,7 @@ export default function AdminPage() {
               {playerCount > 0 ? (
                 <button
                   className="btn-primary btn-large pulse"
-                  onClick={() => startQuestion(0)}
+                  onClick={() => startCountdown(0)}
                 >
                   开始答题
                 </button>
@@ -287,6 +316,23 @@ export default function AdminPage() {
               )}
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Countdown before question
+  if (phase === 'countdown') {
+    const q = questions[currentQ];
+    return (
+      <div className="page countdown-page">
+        <div className="countdown-container">
+          <span className="countdown-q-hint">第 {currentQ + 1} / {questions.length} 题</span>
+          <span className="countdown-tag">【{q.tag}】</span>
+          <div className="countdown-circle" key={countdown}>
+            <span className="countdown-number">{countdown}</span>
+          </div>
+          <span className="countdown-label">准备好了吗？</span>
         </div>
       </div>
     );

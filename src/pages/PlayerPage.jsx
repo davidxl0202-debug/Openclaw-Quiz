@@ -40,7 +40,8 @@ export default function PlayerPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const savedSession = useRef(getSavedSession());
-  const [phase, setPhase] = useState('join'); // join | waiting | question | answered | result | finished
+  const [phase, setPhase] = useState('join'); // join | waiting | countdown | question | answered | result | finished
+  const [countdown, setCountdown] = useState(0);
   const [roomCode, setRoomCode] = useState(() =>
     searchParams.get('room')?.toUpperCase() || savedSession.current?.room || ''
   );
@@ -191,7 +192,21 @@ export default function PlayerPage() {
   useEffect(() => {
     if (!room) return;
 
-    if (room.status === 'question') {
+    if (room.status === 'countdown') {
+      const qIndex = room.currentQuestion;
+      setCurrentQ(qIndex);
+      setSelectedAnswer(null);
+      setLastResult(null);
+      setMyTimeTaken(null);
+      // Calculate remaining countdown from server time
+      if (room.countdownEnd) {
+        const remaining = Math.ceil((room.countdownEnd - Date.now() - serverOffset) / 1000);
+        setCountdown(Math.max(1, Math.min(remaining, 5)));
+      } else {
+        setCountdown(5);
+      }
+      setPhase('countdown');
+    } else if (room.status === 'question') {
       const qIndex = room.currentQuestion;
       if (qIndex !== currentQ) {
         setCurrentQ(qIndex);
@@ -235,6 +250,14 @@ export default function PlayerPage() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [phase, roomCode]);
+
+  // Countdown tick for pre-question phase
+  useEffect(() => {
+    if (phase !== 'countdown') return;
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, countdown]);
 
   // Timer for question phase
   useEffect(() => {
@@ -388,6 +411,23 @@ export default function PlayerPage() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Countdown before question
+  if (phase === 'countdown') {
+    const q = questions[currentQ];
+    return (
+      <div className="page countdown-page">
+        <div className="countdown-container">
+          <span className="countdown-q-hint">第 {currentQ + 1} / {questions.length} 题</span>
+          <span className="countdown-tag">【{q.tag}】</span>
+          <div className="countdown-circle" key={countdown}>
+            <span className="countdown-number">{countdown}</span>
+          </div>
+          <span className="countdown-label">准备好了吗？</span>
         </div>
       </div>
     );
